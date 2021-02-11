@@ -1,0 +1,63 @@
+#!/usr/bin/bash
+
+LEECHDL="/dev/shm/leechdl"
+DELAY=4
+
+# leech checks a so called "leechtab" for the first match of a URL rule. This file represents a tab-separated 2 column list representing routing rules, for example
+# FILTER	COMMAND
+# youtube.com/watch	vlc
+# *.jpg	md
+#
+# leechtab's function is similar to "mimeapps.list", except matching programs to URL patterns
+# The First column FILTER serves as a grep-regex filter for matching the leeched URL and assign it.
+# The last column COMMAND represents a command for the matched urls to be parsed into
+
+#Set up leechtab
+if [[ -n "$XDG_RUNTIME_DIR" ]]; then
+		  if [[ -n "$XDG_CONFIG_HOME" ]]; then
+					 LEECHTAB="$XDG_CONFIG_HOME/leech/leechtab"
+		  elif [[ -n "$XDG_DATA_HOME" ]]; then
+					 LEECHTAB="$XDG_DATA_HOME/leech/leechtab"
+		  else 
+					 LEECHTAB="$HOME/.local/share/leech/leechtab"
+		  fi
+else
+		  if [[ -n "$XDG_CONFIG_HOME" ]]; then
+					 LEECHTAB="$XDG_CONFIG_HOME/leech/leechtab"
+		  elif [[ -n "$XDG_DATA_HOME" ]]; then
+					 LEECHTAB="$XDG_DATA_HOME/leech/leechtab"
+		  else 
+					 LEECHTAB="$HOME/.leechtab"
+		  fi
+fi
+
+echo "Using leechtab $LEECHTAB"
+
+for URL in "$@"
+do
+		  echo "[[[ Leeching $URL ]]]"
+
+		  #Fetch match from leechtab
+		  LEECHMATCH="$(echo "$URL" | grep -m 1 -f <( cut -f1 "$LEECHTAB"))"
+		  echo "$LEECHMATCH"
+
+		  #Check leechtab urls
+		  if [[ -n "$LEECHMATCH" ]]; then
+					 $(cut -f2 "$LEECHTAB") "$URL"&
+		  else
+					 echo "No URL rule found. Resorting to XDG MIME rules..."
+					 curl -fsSL "$URL" | sponge "$LEECHDL" && 
+					 file "$LEECHDL" &&
+					 xdg-mime query filetype "$LEECHDL" &&
+					 #if [[ $(xdg-mime query filetype "$LEECHDL") == *"html"* ]]; then
+								#xdg-open "$URL"
+					 #else
+								xdg-open "$LEECHDL"
+					 #fi
+					 sleep "$DELAY"
+					 rm "$LEECHDL"
+		  fi
+
+		  #Sleep delay kludge due to xdg-open immediately returning 0
+done
+
